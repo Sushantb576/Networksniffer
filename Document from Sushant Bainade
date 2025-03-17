@@ -1,0 +1,61 @@
+import socket
+import struct
+import datetime
+import os
+
+PROTOCOLS = {1: "ICMP", 6: "TCP", 17: "UDP"}
+
+def start_sniffer(filter_ip=None):
+    try:
+        sniffer = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
+        sniffer.bind((socket.gethostname(), 0))
+        sniffer.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
+        if os.name == "nt":
+            sniffer.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+
+        print("\n📡 Network Sniffer Started... Press Ctrl+C to stop.\n")
+        
+        while True:
+            packet, _ = sniffer.recvfrom(65565)
+            process_packet(packet, filter_ip)
+
+    except PermissionError:
+        print("❌ Permission Denied: Run the script as Administrator or root!")
+    except KeyboardInterrupt:
+        print("\n🛑 Sniffing Stopped.")
+        print("Good byeMessage")
+        print("Task 1")
+
+def process_packet(packet, filter_ip):
+    ip_header = packet[:20]
+    iph = struct.unpack("!BBHHHBBH4s4s", ip_header)
+
+    src_ip = socket.inet_ntoa(iph[8])
+    dst_ip = socket.inet_ntoa(iph[9])
+    protocol = iph[6]
+    proto_name = PROTOCOLS.get(protocol, "OTHER")
+
+    src_port = dst_port = "-"
+    if protocol in (6, 17):  # TCP or UDP
+        
+        tcp_udp_header = packet[20:28]
+        src_port, dst_port = struct.unpack("!HH", tcp_udp_header[:4])
+
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+
+    if filter_ip and filter_ip not in (src_ip, dst_ip):
+        return
+
+    print(f"[{timestamp}] {proto_name} | {src_ip}:{src_port} -> {dst_ip}:{dst_port} | {len(packet)} bytes")
+
+def export_to_pcap(filename, packets):
+    with open(filename, "wb") as f:
+        for packet in packets:
+            f.write(packet)
+    print(f"✅ Packets saved to {filename}, open in Wireshark!")
+
+if __name__ == "__main__":
+    ip_filter = input("Enter an IP to filter (or press Enter to capture all): ").strip()
+    start_sniffer(filter_ip=ip_filter if ip_filter else None)
+
